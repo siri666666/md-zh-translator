@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "md-zh-translator"
+version = "0.1.0"
+description = "Translate English Markdown to Chinese with a custom OpenAI-compatible API."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "openai>=1.40.0",
+  "python-dotenv>=1.0.1",
+  "markdown-it-py>=3.0.0",
+]
+
+[project.scripts]
+md-zh-translator = "md_translate_zh.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
