@@ -76,6 +76,20 @@ md-zh-translator -i examples/sample_en.md -o examples/sample_zh.md --verbose
 md-zh-translator -i examples/sample_en.md -o examples/sample_zh.md
 ```
 
+## Windows 免安装包（Release）
+
+- 若从 GitHub Release 下载 `md-zh-translator-windows-x64-*.zip`，解压后可直接运行：
+
+```powershell
+.\md-zh-translator.exe --help
+```
+
+- 仓库维护者可用以下脚本生成该 zip：
+
+```powershell
+.\scripts\build_windows_release.ps1 -Version v0.1.0
+```
+
 默认输出文件名规则：
 
 - 输入 `paper.md` -> 输出 `paper.zh.md`
