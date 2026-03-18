@@ -32,6 +32,13 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+如果你只想“一个 Python 脚本直接跑”（不打包）：
+
+```bash
+pip install -r requirements.txt
+python md_zh_translator.py --help
+```
+
 ## 配置
 
 复制并填写环境变量：
@@ -56,6 +63,12 @@ MDT_MAX_TPM=120000
 md-zh-translator -i examples/sample_en.md -o examples/sample_zh.md --verbose
 ```
 
+或用单脚本入口（Windows/Linux 都通用）：
+
+```bash
+python md_zh_translator.py -i examples/sample_en.md -o examples/sample_zh.md --verbose
+```
+
 常用参数：
 
 - `--api-key`：覆盖环境变量 API Key
@@ -76,19 +89,32 @@ md-zh-translator -i examples/sample_en.md -o examples/sample_zh.md --verbose
 md-zh-translator -i examples/sample_en.md -o examples/sample_zh.md
 ```
 
-## Windows 免安装包（Release）
+## 跨平台免安装包（Release）
 
-- 若从 GitHub Release 下载 `md-zh-translator-windows-x64-*.zip`，解压后可直接运行：
+- GitHub Release 提供以下压缩包：
+  - `md-zh-translator-windows-x64-*.zip`
+  - `md-zh-translator-linux-x64-*.zip`
+
+- Windows 解压后直接运行：
 
 ```powershell
 .\md-zh-translator.exe --help
 ```
 
-- 仓库维护者可用以下脚本生成该 zip：
+- Linux 解压后运行：
+
+```bash
+chmod +x ./md-zh-translator
+./md-zh-translator --help
+```
+
+- 仓库维护者本地构建当前系统的免安装包：
 
 ```powershell
-.\scripts\build_windows_release.ps1 -Version v0.1.0
+python .\scripts\build_release.py --version v0.1.0
 ```
+
+- 推送标签（如 `v0.1.1`）后，GitHub Actions 会自动构建 Windows/Linux 两个 zip 并上传到 Release。
 
 默认输出文件名规则：
 
