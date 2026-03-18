@@ -16,25 +16,10 @@
   - `References/Bibliography` 等参考文献区域
   - 典型引用行（如 `[1] ...`, `doi: ...`）
 
-## 安装
+## 运行方式（无需构建）
 
 ```bash
 cd md-zh-translator
-python -m venv .venv
-.venv\Scripts\activate
-pip install -e .
-```
-
-或直接：
-
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
-
-如果你只想“一个 Python 脚本直接跑”（不打包）：
-
-```bash
 pip install -r requirements.txt
 python md_zh_translator.py --help
 ```
@@ -60,12 +45,6 @@ MDT_MAX_TPM=120000
 ## 使用
 
 ```bash
-md-zh-translator -i examples/sample_en.md -o examples/sample_zh.md --verbose
-```
-
-或用单脚本入口（Windows/Linux 都通用）：
-
-```bash
 python md_zh_translator.py -i examples/sample_en.md -o examples/sample_zh.md --verbose
 ```
 
@@ -86,7 +65,7 @@ python md_zh_translator.py -i examples/sample_en.md -o examples/sample_zh.md --v
 ## 示例
 
 ```bash
-md-zh-translator -i examples/sample_en.md -o examples/sample_zh.md
+python md_zh_translator.py -i examples/sample_en.md -o examples/sample_zh.md
 ```
 
 默认输出文件名规则：
