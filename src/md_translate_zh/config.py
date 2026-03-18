@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -58,56 +57,49 @@ class AppConfig:
 
     @classmethod
     def from_args(cls, args: Any, require_api: bool = True) -> "AppConfig":
-        api_key = _first_non_empty(
-            getattr(args, "api_key", None),
-            os.getenv("MDT_API_KEY"),
-            os.getenv("OPENAI_API_KEY"),
-        )
+        api_key = _first_non_empty(getattr(args, "api_key", None))
         base_url = _first_non_empty(
             getattr(args, "base_url", None),
-            os.getenv("MDT_BASE_URL"),
-            os.getenv("OPENAI_BASE_URL"),
             "https://api.openai.com/v1",
         )
         model = _first_non_empty(
             getattr(args, "model", None),
-            os.getenv("MDT_MODEL"),
             "gpt-4o-mini",
         )
 
         if require_api and not api_key:
-            raise ValueError("缺少 API Key，请通过 --api-key 或环境变量 MDT_API_KEY 提供。")
+            raise ValueError("缺少 API Key，请通过 --api-key 提供。")
         if not api_key:
             api_key = "DUMMY_KEY"
 
         max_chars = _parse_int(
-            _first_non_empty(getattr(args, "max_chars", None), os.getenv("MDT_MAX_CHARS"), 2600),
+            _first_non_empty(getattr(args, "max_chars", None), 2600),
             "max_chars",
             minimum=400,
         )
         temperature = _parse_float(
-            _first_non_empty(getattr(args, "temperature", None), os.getenv("MDT_TEMPERATURE"), 0.2),
+            _first_non_empty(getattr(args, "temperature", None), 0.2),
             "temperature",
             minimum=0.0,
             maximum=2.0,
         )
         max_retries = _parse_int(
-            _first_non_empty(getattr(args, "max_retries", None), os.getenv("MDT_MAX_RETRIES"), 3),
+            _first_non_empty(getattr(args, "max_retries", None), 3),
             "max_retries",
             minimum=1,
         )
         timeout = _parse_float(
-            _first_non_empty(getattr(args, "timeout", None), os.getenv("MDT_TIMEOUT"), 120),
+            _first_non_empty(getattr(args, "timeout", None), 120),
             "timeout",
             minimum=1,
         )
         max_rpm = _parse_optional_int(
-            _first_non_empty(getattr(args, "max_rpm", None), os.getenv("MDT_MAX_RPM")),
+            _first_non_empty(getattr(args, "max_rpm", None)),
             "max_rpm",
             minimum=1,
         )
         max_tpm = _parse_optional_int(
-            _first_non_empty(getattr(args, "max_tpm", None), os.getenv("MDT_MAX_TPM")),
+            _first_non_empty(getattr(args, "max_tpm", None)),
             "max_tpm",
             minimum=1,
         )

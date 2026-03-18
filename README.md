@@ -24,35 +24,25 @@ pip install -r requirements.txt
 python md_zh_translator.py --help
 ```
 
-## 配置
-
-复制并填写环境变量：
-
-```bash
-copy .env.example .env
-```
-
-`.env` 示例：
-
-```env
-MDT_API_KEY=your_api_key_here
-MDT_BASE_URL=https://api.openai.com/v1
-MDT_MODEL=gpt-4o-mini
-MDT_MAX_RPM=60
-MDT_MAX_TPM=120000
-```
+不需要配置环境变量，直接命令参数传入即可。
 
 ## 使用
 
 ```bash
-python md_zh_translator.py -i examples/sample_en.md -o examples/sample_zh.md --verbose
+python md_zh_translator.py \
+  -i examples/sample_en.md \
+  -o examples/sample_zh.md \
+  --api-key "<YOUR_KEY>" \
+  --base-url "https://api.deepseek.com/v1" \
+  --model "deepseek-chat" \
+  --verbose
 ```
 
 常用参数：
 
-- `--api-key`：覆盖环境变量 API Key
-- `--base-url`：覆盖环境变量 Base URL
-- `--model`：覆盖环境变量模型名
+- `--api-key`：API Key（真翻译时必填）
+- `--base-url`：API Base URL（默认 `https://api.openai.com/v1`）
+- `--model`：模型名（默认 `gpt-4o-mini`）
 - `--max-chars`：每次请求的分片字符数（默认 `2600`）
 - `--max-rpm`：每分钟最大请求数（RPM）
 - `--max-tpm`：每分钟最大令牌数（TPM，先本地估算后按响应 usage 校正）
@@ -65,7 +55,12 @@ python md_zh_translator.py -i examples/sample_en.md -o examples/sample_zh.md --v
 ## 示例
 
 ```bash
-python md_zh_translator.py -i examples/sample_en.md -o examples/sample_zh.md
+python md_zh_translator.py \
+  -i examples/sample_en.md \
+  -o examples/sample_zh.md \
+  --api-key "<YOUR_KEY>" \
+  --base-url "https://api.deepseek.com/v1" \
+  --model "deepseek-chat"
 ```
 
 默认输出文件名规则：

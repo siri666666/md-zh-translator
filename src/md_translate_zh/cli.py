@@ -6,8 +6,6 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
-from dotenv import load_dotenv
-
 from .cleaner import remove_legal_boilerplate
 from .client import TranslationClient
 from .config import AppConfig
@@ -35,9 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-i", "--input", required=True, help="输入 Markdown 文件路径")
     parser.add_argument("-o", "--output", help="输出 Markdown 文件路径，默认在原文件名后追加 .zh")
 
-    parser.add_argument("--api-key", help="API Key，可替代 MDT_API_KEY")
-    parser.add_argument("--base-url", help="API Base URL，可替代 MDT_BASE_URL")
-    parser.add_argument("--model", help="模型名，可替代 MDT_MODEL")
+    parser.add_argument("--api-key", help="API Key（真翻译时必填）")
+    parser.add_argument("--base-url", help="API Base URL（默认 https://api.openai.com/v1）")
+    parser.add_argument("--model", help="模型名（默认 gpt-4o-mini）")
 
     parser.add_argument("--max-chars", type=int, help="每个翻译分片最大字符数")
     parser.add_argument("--temperature", type=float, help="采样温度")
@@ -96,7 +94,6 @@ def _is_exact_match(source: str, target: str) -> bool:
 
 
 def main() -> int:
-    load_dotenv()
     parser = build_parser()
     args = parser.parse_args()
 
