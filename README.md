@@ -89,33 +89,6 @@ python md_zh_translator.py -i examples/sample_en.md -o examples/sample_zh.md --v
 md-zh-translator -i examples/sample_en.md -o examples/sample_zh.md
 ```
 
-## 跨平台免安装包（Release）
-
-- GitHub Release 提供以下压缩包：
-  - `md-zh-translator-windows-x64-*.zip`
-  - `md-zh-translator-linux-x64-*.zip`
-
-- Windows 解压后直接运行：
-
-```powershell
-.\md-zh-translator.exe --help
-```
-
-- Linux 解压后运行：
-
-```bash
-chmod +x ./md-zh-translator
-./md-zh-translator --help
-```
-
-- 仓库维护者本地构建当前系统的免安装包：
-
-```powershell
-python .\scripts\build_release.py --version v0.1.0
-```
-
-- 推送标签（如 `v0.1.1`）后，GitHub Actions 会自动构建 Windows/Linux 两个 zip 并上传到 Release。
-
 默认输出文件名规则：
 
 - 输入 `paper.md` -> 输出 `paper.zh.md`
