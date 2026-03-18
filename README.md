@@ -46,6 +46,7 @@ python md_zh_translator.py \
 - `--max-chars`：每次请求的分片字符数（默认 `2600`）
 - `--max-rpm`：每分钟最大请求数（RPM）
 - `--max-tpm`：每分钟最大令牌数（TPM，先本地估算后按响应 usage 校正）
+- `--concurrency`：并发翻译分片数（默认 `1`，可设 `2~8`）
 - `--translate-references`：默认不翻译参考文献，打开此参数后会尝试翻译
 - `--dry-run`：不调用 API，只跑保护/还原流程；默认逐字符透传输入
 - `--keep-boilerplate`：关闭自动清理版权/许可噪声块
@@ -60,7 +61,8 @@ python md_zh_translator.py \
   -o examples/sample_zh.md \
   --api-key "<YOUR_KEY>" \
   --base-url "https://api.deepseek.com/v1" \
-  --model "deepseek-chat"
+  --model "deepseek-chat" \
+  --concurrency 4
 ```
 
 默认输出文件名规则：

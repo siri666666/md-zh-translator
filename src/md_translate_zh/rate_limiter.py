@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -20,17 +21,19 @@ class SlidingWindowRateLimiter:
         self.max_tpm = max_tpm
         self._request_times: Deque[float] = deque()
         self._token_records: Deque[tuple[float, int]] = deque()
+        self._lock = threading.Lock()
 
     def acquire(self, estimated_tokens: int = 0) -> TokenReservation:
         while True:
-            now = time.monotonic()
-            self._prune(now)
-            wait_seconds = self._next_wait_seconds(now, estimated_tokens)
-            if wait_seconds <= 0:
-                self._request_times.append(now)
-                if self.max_tpm and estimated_tokens > 0:
-                    self._token_records.append((now, estimated_tokens))
-                return TokenReservation(timestamp=now, estimated_tokens=estimated_tokens)
+            with self._lock:
+                now = time.monotonic()
+                self._prune(now)
+                wait_seconds = self._next_wait_seconds(now, estimated_tokens)
+                if wait_seconds <= 0:
+                    self._request_times.append(now)
+                    if self.max_tpm and estimated_tokens > 0:
+                        self._token_records.append((now, estimated_tokens))
+                    return TokenReservation(timestamp=now, estimated_tokens=estimated_tokens)
             time.sleep(min(wait_seconds, 5.0))
 
     def add_positive_delta(self, extra_tokens: int) -> None:
@@ -38,9 +41,10 @@ class SlidingWindowRateLimiter:
             return
         if extra_tokens <= 0:
             return
-        now = time.monotonic()
-        self._prune(now)
-        self._token_records.append((now, extra_tokens))
+        with self._lock:
+            now = time.monotonic()
+            self._prune(now)
+            self._token_records.append((now, extra_tokens))
 
     def _prune(self, now: float) -> None:
         threshold = now - 60.0

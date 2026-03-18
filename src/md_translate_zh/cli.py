@@ -43,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=float, help="请求超时秒数")
     parser.add_argument("--max-rpm", type=int, help="每分钟最大请求数（RPM）")
     parser.add_argument("--max-tpm", type=int, help="每分钟最大令牌数（TPM，按本地估算+响应校正）")
+    parser.add_argument("--concurrency", type=int, help="并发翻译分片数（默认 1）")
 
     parser.add_argument(
         "--translate-references",
@@ -136,6 +137,7 @@ def main() -> int:
         skip_reference_sections=not args.translate_references,
         skip_reference_lines=not args.translate_references,
         normalize_ocr_breaks=(not args.keep_ocr_linebreaks) and (not args.dry_run),
+        concurrency=config.concurrency,
     )
 
     def on_progress(index: int, total: int) -> None:

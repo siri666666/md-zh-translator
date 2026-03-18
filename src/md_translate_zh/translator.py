@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 import re
 from dataclasses import dataclass
@@ -37,12 +38,14 @@ class MarkdownTranslator:
         self,
         client: TranslationClient,
         max_chars: int,
+        concurrency: int = 1,
         skip_reference_sections: bool = True,
         skip_reference_lines: bool = True,
         normalize_ocr_breaks: bool = True,
     ) -> None:
         self.client = client
         self.max_chars = max_chars
+        self.concurrency = max(1, concurrency)
         self.normalize_ocr_breaks = normalize_ocr_breaks
         self.masker = MarkdownMasker(
             skip_reference_sections=skip_reference_sections,
@@ -64,31 +67,48 @@ class MarkdownTranslator:
             merged_breaks = reflowed.merged_breaks
 
         segments = segment_markdown_for_translation(masked_text, self.max_chars)
-        translatable_segments = [segment for segment in segments if segment.translatable]
-
-        translated_parts: List[str] = []
+        translatable_indexes = [idx for idx, segment in enumerate(segments) if segment.translatable]
+        translated_parts: List[str] = [segment.text for segment in segments]
         translated_count = 0
         guard_fallback_chunks = 0
         completed = 0
-        total = len(translatable_segments)
+        total = len(translatable_indexes)
 
-        for segment in segments:
-            if not segment.translatable:
-                translated_parts.append(segment.text)
+        pending: List[tuple[int, str]] = []
+        for idx in translatable_indexes:
+            source_text = segments[idx].text
+            if dry_run or self._should_skip_chunk(source_text):
+                translated_parts[idx] = source_text
+                completed += 1
+                if progress_callback is not None:
+                    progress_callback(completed, total)
                 continue
+            pending.append((idx, source_text))
 
-            completed += 1
-            if progress_callback is not None:
-                progress_callback(completed, total)
-
-            if dry_run or self._should_skip_chunk(segment.text):
-                translated_parts.append(segment.text)
-                continue
-
-            translated_text, used_fallback = self._translate_segment_with_guard(segment.text)
-            guard_fallback_chunks += used_fallback
-            translated_parts.append(self._preserve_line_ending_suffix(segment.text, translated_text))
-            translated_count += 1
+        if self.concurrency <= 1 or len(pending) <= 1:
+            for idx, source_text in pending:
+                translated_text, used_fallback = self._translate_segment_with_guard(source_text)
+                translated_parts[idx] = self._preserve_line_ending_suffix(source_text, translated_text)
+                guard_fallback_chunks += used_fallback
+                translated_count += 1
+                completed += 1
+                if progress_callback is not None:
+                    progress_callback(completed, total)
+        else:
+            with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
+                futures = {
+                    executor.submit(self._translate_segment_with_guard, source_text): (idx, source_text)
+                    for idx, source_text in pending
+                }
+                for future in as_completed(futures):
+                    idx, source_text = futures[future]
+                    translated_text, used_fallback = future.result()
+                    translated_parts[idx] = self._preserve_line_ending_suffix(source_text, translated_text)
+                    guard_fallback_chunks += used_fallback
+                    translated_count += 1
+                    completed += 1
+                    if progress_callback is not None:
+                        progress_callback(completed, total)
 
         merged = "".join(translated_parts)
         restored = MarkdownMasker.unmask(merged, masked.replacements)

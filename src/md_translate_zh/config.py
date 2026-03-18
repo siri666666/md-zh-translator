@@ -54,6 +54,7 @@ class AppConfig:
     timeout: float = 120.0
     max_rpm: int | None = None
     max_tpm: int | None = None
+    concurrency: int = 1
 
     @classmethod
     def from_args(cls, args: Any, require_api: bool = True) -> "AppConfig":
@@ -103,6 +104,11 @@ class AppConfig:
             "max_tpm",
             minimum=1,
         )
+        concurrency = _parse_int(
+            _first_non_empty(getattr(args, "concurrency", None), 1),
+            "concurrency",
+            minimum=1,
+        )
 
         return cls(
             api_key=api_key,
@@ -114,4 +120,5 @@ class AppConfig:
             timeout=timeout,
             max_rpm=max_rpm,
             max_tpm=max_tpm,
+            concurrency=concurrency,
         )
