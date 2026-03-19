@@ -49,6 +49,7 @@ python md_zh_translator.py \
 - `--keep-boilerplate`：关闭自动清理版权/许可噪声块
 - `--keep-ocr-linebreaks`：关闭自动修复 OCR 段内断行
 - `--strict-integrity`：开启严格完整性校验（结构 + 占位符 + 疑似漏翻）
+- `--verbose`：输出详细日志（并发信息、分片进度、补救统计）；不影响最终翻译内容
 
 默认输出文件名规则：
 
