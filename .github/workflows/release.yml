@@ -1,0 +1,177 @@
+name: Release Assets
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve Tag And Version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^v[0-9]+(\.[0-9]+){1,2}$ ]]; then
+            echo "Unsupported tag format: $TAG"
+            echo "Expected format: vX.Y or vX.Y.Z"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Resolved tag=$TAG version=$VERSION"
+
+      - name: Verify Version Consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re
+          import tomllib
+          from pathlib import Path
+          import os
+
+          version_from_tag = os.environ["VERSION"]
+          pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          version_from_pyproject = str(pyproject["project"]["version"]).strip()
+
+          init_text = Path("src/md_translate_zh/__init__.py").read_text(encoding="utf-8")
+          match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', init_text)
+          if not match:
+              raise SystemExit("Cannot parse __version__ from src/md_translate_zh/__init__.py")
+          version_from_init = match.group(1).strip()
+
+          versions = {
+              "tag": version_from_tag,
+              "pyproject.toml": version_from_pyproject,
+              "__init__.py": version_from_init,
+          }
+          unique_versions = {v for v in versions.values()}
+          if len(unique_versions) != 1:
+              detail = ", ".join(f"{k}={v}" for k, v in versions.items())
+              raise SystemExit(f"Version mismatch: {detail}")
+
+          print(f"Version check passed: {version_from_tag}")
+          PY
+
+      - name: Ensure Release Exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists: $TAG"
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
+              --generate-notes
+            echo "Release created: $TAG"
+          fi
+
+      - name: Read Release Metadata And Build Changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/release
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > artifacts/release/release_meta.json
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          meta_path = Path("artifacts/release/release_meta.json")
+          meta = json.loads(meta_path.read_text(encoding="utf-8"))
+          body = str(meta.get("body") or "")
+          html_url = str(meta.get("html_url") or "")
+          published_at = str(meta.get("published_at") or "")
+
+          bullet_patterns = [
+              re.compile(r"^\s*[-*+]\s+(.+?)\s*$"),
+              re.compile(r"^\s*\d+[.)]\s+(.+?)\s*$"),
+          ]
+
+          items = []
+          for line in body.splitlines():
+              line = line.strip()
+              if not line:
+                  continue
+              for pattern in bullet_patterns:
+                  m = pattern.match(line)
+                  if m:
+                      text = m.group(1).strip()
+                      if text and text not in items:
+                          items.append(text)
+                      break
+              if len(items) >= 8:
+                  break
+
+          if not items:
+              paragraphs = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
+              for paragraph in paragraphs:
+                  line = " ".join(x.strip() for x in paragraph.splitlines() if x.strip())
+                  if line:
+                      items = [line]
+                      break
+
+          if not items:
+              items = ["常规版本更新。"]
+
+          changelog_path = Path("artifacts/release/changelog.txt")
+          changelog_path.write_text("\n".join(items) + "\n", encoding="utf-8")
+
+          env_path = Path(os.environ["GITHUB_ENV"])
+          with env_path.open("a", encoding="utf-8") as f:
+              if html_url:
+                  f.write(f"RELEASE_URL={html_url}\n")
+              if published_at:
+                  f.write(f"RELEASE_PUBLISHED_AT={published_at}\n")
+          PY
+
+      - name: Build Release Assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build_release_assets.py \
+            --version "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --output-dir artifacts/release \
+            --zip-name md-zh-translator.zip \
+            --notes-url "${RELEASE_URL:-}" \
+            --published-at "${RELEASE_PUBLISHED_AT:-}" \
+            --changelog-file artifacts/release/changelog.txt
+
+      - name: Upload Assets To Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" \
+            artifacts/release/md-zh-translator.zip \
+            artifacts/release/update.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+      - name: Print Summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Release assets updated for $TAG"
+          ls -lh artifacts/release

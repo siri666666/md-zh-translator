@@ -36,13 +36,6 @@ def _parse_float(value: Any, field_name: str, minimum: float, maximum: float | N
     return parsed
 
 
-def _parse_optional_int(value: Any, field_name: str, minimum: int) -> int | None:
-    candidate = _first_non_empty(value)
-    if candidate is None:
-        return None
-    return _parse_int(candidate, field_name, minimum=minimum)
-
-
 @dataclass(frozen=True)
 class AppConfig:
     api_key: str
@@ -52,8 +45,6 @@ class AppConfig:
     temperature: float = 0.2
     max_retries: int = 3
     timeout: float = 120.0
-    max_rpm: int | None = None
-    max_tpm: int | None = None
     concurrency: int = 1
 
     @classmethod
@@ -94,21 +85,10 @@ class AppConfig:
             "timeout",
             minimum=1,
         )
-        max_rpm = _parse_optional_int(
-            _first_non_empty(getattr(args, "max_rpm", None)),
-            "max_rpm",
-            minimum=1,
-        )
-        max_tpm = _parse_optional_int(
-            _first_non_empty(getattr(args, "max_tpm", None)),
-            "max_tpm",
-            minimum=1,
-        )
-        concurrency = _parse_int(
-            _first_non_empty(getattr(args, "concurrency", None), 1),
-            "concurrency",
-            minimum=1,
-        )
+        concurrency_raw = _first_non_empty(getattr(args, "concurrency", None))
+        if concurrency_raw is None:
+            raise ValueError("缺少并发参数，请通过 --concurrency 提供固定并发数。")
+        concurrency = _parse_int(concurrency_raw, "concurrency", minimum=1)
 
         return cls(
             api_key=api_key,
@@ -118,7 +98,5 @@ class AppConfig:
             temperature=temperature,
             max_retries=max_retries,
             timeout=timeout,
-            max_rpm=max_rpm,
-            max_tpm=max_tpm,
             concurrency=concurrency,
         )

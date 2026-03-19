@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 from .cleaner import remove_legal_boilerplate
-from .client import TranslationClient
+from .client import RateLimitAbortError, TranslationClient
 from .config import AppConfig
 from .translator import MarkdownTranslator
 
@@ -41,9 +41,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--temperature", type=float, help="采样温度")
     parser.add_argument("--max-retries", type=int, help="请求失败重试次数")
     parser.add_argument("--timeout", type=float, help="请求超时秒数")
-    parser.add_argument("--max-rpm", type=int, help="每分钟最大请求数（RPM）")
-    parser.add_argument("--max-tpm", type=int, help="每分钟最大令牌数（TPM，按本地估算+响应校正）")
-    parser.add_argument("--concurrency", type=int, help="并发翻译分片数（默认 1）")
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        required=True,
+        help="固定并发线程数（必填，建议根据供应商限流能力手动调整）",
+    )
 
     parser.add_argument(
         "--translate-references",
@@ -68,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--strict-integrity",
         action="store_true",
-        help="对公式标记完整性执行严格校验，发现异常时返回非 0 状态码。",
+        help="执行严格完整性校验（结构+占位符+疑似漏翻），异常时返回非 0 且不写输出文件。",
     )
     parser.add_argument("--verbose", action="store_true", help="显示分片处理进度")
     return parser
@@ -114,6 +117,9 @@ def main() -> int:
         print(f"配置错误: {exc}", file=sys.stderr)
         return 2
 
+    if args.verbose:
+        print(f"并发模式: 固定并发 {config.concurrency}", file=sys.stderr)
+
     try:
         with input_path.open("r", encoding="utf-8", newline="") as file:
             markdown_text = file.read()
@@ -150,24 +156,42 @@ def main() -> int:
             dry_run=args.dry_run,
             progress_callback=on_progress,
         )
+    except RateLimitAbortError:
+        print("翻译失败: 命中 429，请降低 --concurrency 后重试（建议先减半）。", file=sys.stderr)
+        return 1
     except Exception as exc:  # noqa: BLE001
         print(f"翻译失败: {exc}", file=sys.stderr)
         return 1
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8", newline="") as file:
-        file.write(result.text)
+    integrity_issues = _collect_integrity_issues(markdown_text, result.text)
+    dry_run_mismatch = args.dry_run and not _is_exact_match(markdown_text, result.text)
+    has_placeholder_artifacts = "@@__MDTZ_" in result.text
+    strict_failures: List[str] = []
 
-    print(f"完成: {input_path} -> {output_path}")
-    print(
-        f"分片: {result.total_chunks}，实际调用翻译: {result.translated_chunks}，保护片段: {result.protected_items}"
-    )
+    if integrity_issues:
+        strict_failures.extend([f"结构完整性异常: {issue}" for issue in integrity_issues])
+    if result.unresolved_placeholders:
+        strict_failures.append("输出中存在未还原占位符")
+    if has_placeholder_artifacts:
+        strict_failures.append("输出中存在占位符残片")
+    if dry_run_mismatch:
+        strict_failures.append("dry-run 输出与输入不一致")
+    if result.hard_failed_chunks > 0:
+        strict_failures.append(f"占位符补救失败分片: {result.hard_failed_chunks}")
+    if result.suspicious_unchanged_chunks > 0:
+        strict_failures.append(f"疑似漏翻分片: {result.suspicious_unchanged_chunks}")
+
     if args.verbose and result.merged_breaks > 0:
         print(f"已自动修复段内断行: {result.merged_breaks}", file=sys.stderr)
-    if args.verbose and result.guard_fallback_chunks > 0:
+    if args.verbose and result.recovered_chunks > 0:
+        print(f"占位符补救成功分片: {result.recovered_chunks}", file=sys.stderr)
+    if result.guard_fallback_chunks > 0:
         print(f"占位符守护回退分片: {result.guard_fallback_chunks}", file=sys.stderr)
+    if result.hard_failed_chunks > 0:
+        print(f"警告: 占位符补救失败分片: {result.hard_failed_chunks}", file=sys.stderr)
+    if result.suspicious_unchanged_chunks > 0:
+        print(f"警告: 检测到疑似漏翻分片: {result.suspicious_unchanged_chunks}", file=sys.stderr)
 
-    integrity_issues = _collect_integrity_issues(markdown_text, result.text)
     if integrity_issues:
         print("警告: 检测到结构完整性差异：", file=sys.stderr)
         for issue in integrity_issues:
@@ -181,20 +205,38 @@ def main() -> int:
         if args.verbose:
             preview = ", ".join(result.unresolved_placeholders[:5])
             print(f"未还原占位符示例: {preview}", file=sys.stderr)
+    if has_placeholder_artifacts:
+        print("警告: 输出中存在占位符残片（@@__MDTZ_...），请重试或更换模型。", file=sys.stderr)
 
-    if args.dry_run and not _is_exact_match(markdown_text, result.text):
+    if dry_run_mismatch:
         print("警告: dry-run 输出与输入不一致。", file=sys.stderr)
         if args.verbose:
             print("建议检查是否有占位符保护/还原逻辑被破坏。", file=sys.stderr)
 
-    if args.verbose and not integrity_issues and not result.unresolved_placeholders:
+    if args.verbose and not strict_failures:
         print("完整性检查通过（公式/链接/图片/代码围栏/占位符）。", file=sys.stderr)
 
-    if args.strict_integrity:
-        if integrity_issues or result.unresolved_placeholders:
-            return 1
-        if args.dry_run and not _is_exact_match(markdown_text, result.text):
-            return 1
+    if args.strict_integrity and strict_failures:
+        print("严格完整性检查失败：", file=sys.stderr)
+        for reason in strict_failures:
+            print(f"  - {reason}", file=sys.stderr)
+        return 1
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as file:
+        file.write(result.text)
+
+    print(f"完成: {input_path} -> {output_path}")
+    print(
+        "分片: "
+        f"{result.total_chunks}，实际调用翻译: {result.translated_chunks}，保护片段: {result.protected_items}"
+    )
+    if result.recovered_chunks > 0:
+        print(f"补救成功分片: {result.recovered_chunks}")
+    if result.hard_failed_chunks > 0:
+        print(f"补救失败分片: {result.hard_failed_chunks}")
+    if result.suspicious_unchanged_chunks > 0:
+        print(f"疑似漏翻分片: {result.suspicious_unchanged_chunks}")
     return 0
 
 

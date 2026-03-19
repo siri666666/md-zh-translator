@@ -7,3 +7,4 @@ build/
 *.egg-info/
 artifacts/
 *.spec
+.mdzt_update_backups/
